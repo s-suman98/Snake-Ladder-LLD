@@ -1,11 +1,12 @@
-package org.com.entity;
 
+package org.com.entity;
 
 import lombok.Builder;
 import lombok.Data;
 import org.com.enums.GameStatus;
 import org.com.exceptions.GameAlredyCompletedException;
 import org.com.exceptions.InvalidMoveException;
+import org.com.exceptions.NotSufficientPlayerException;
 import org.com.model.Player;
 import org.com.model.Position;
 import org.com.strategy.WiningStrategyI;
@@ -16,73 +17,173 @@ import java.util.List;
 @Builder
 public class Game {
 
-private Board board; //owns board
-
-private List< Player > players; //manages player
-
-private GameStatus gameStatus;  //Knows about the gae status
-
-private WiningStrategyI winingStrategy;   //Uses this to temp cehck the winner
-
+private Board board;                    // Owns the board
+private List< Player > players;           // Manages players
+private GameStatus gameStatus;           // Current game status
+private WiningStrategyI winingStrategy;  // Checks winning condition
 private int currentPlayerTurn;
-
+private DiceI dice;
 private Player winnigPlayer;
 
+// State related to the current turn
+private Position turnStartPosition;
+private int consecutiveSixes;
 
-public void switchPlayer () {
-	int currindex = (currentPlayerTurn + 1) % players.size ();
-	this.currentPlayerTurn = currindex;
+
+private void switchPlayer () {
+	int next = (currentPlayerTurn + 1) % players.size ();
+	currentPlayerTurn = next;
+}
+
+
+//JUST CHECK SUFFICENT PLAYER AND THE STARTS THE GAME
+public void start () {
+	
+	if ( players.size () < 2 ) {
+		throw new NotSufficientPlayerException (
+				"At least 2 players are required"
+		);
+	}
+	
+	while ( gameStatus != GameStatus.COMPLETED ) {
+		System.out.println ();
+		System.out.println ();
+		System.out.println ("Next Player Turn @@@@@@@@");
+		
+		playTurn ();
+	}
 	
 	
 }
 
 
-public GameStatus makeMove (int dicevalue) {
+private void playTurn () {
+	
+	// get the current player
+	
+	Player current = players.get (currentPlayerTurn);
+	
+	
+	//save the state of current player
+	turnStartPosition = current.getPosition ();
+	consecutiveSixes = 0;
+	
+	
+	// while()
+	
+	while ( GameStatus.COMPLETED != gameStatus ) {
+		
+		//roll a dice
+		int diceValue = dice.roll ();
+		
+		System.out.println ("Dice gave "+diceValue);
+		
+		// use the single move
+		try {
+			makeMove (diceValue);
+		} catch ( Exception e ) {
+			switchPlayer ();
+			return;
+		}
+		
+		if(gameStatus==GameStatus.COMPLETED){
+			return;
+		}
+		
+		if( !isExtraTurn (diceValue) ){
+			this.switchPlayer ();
+			return;
+			
+		}
+		
+		System.out.println ("Extra Chance to roll ");
+		
+		
+	}
+}
+
+
+private void undoCurrentPlayerScore () {
+	this.consecutiveSixes = 0;
+	players.get (currentPlayerTurn).setPosition (turnStartPosition);
+	turnStartPosition = null;
+}
+
+
+private boolean isExtraTurn (int diceValue) {
+	
+	if ( diceValue != 6 ) {
+		return false;
+	}
+	
+	consecutiveSixes++;
+	
+	if ( consecutiveSixes == 2 ||consecutiveSixes==1 ) {
+		return true;
+	}
+	
+	if ( consecutiveSixes == 3 ) {
+		System.out.println ("XXX PENALITY");
+		undoCurrentPlayerScore ();
+	}
+	
+	return false;
+	
+	
+}
+
+
+public GameStatus makeMove (int diceValue) {
 	
 	if ( gameStatus == GameStatus.COMPLETED ) {
-		throw new GameAlredyCompletedException ("Game has already finished");
+		throw new GameAlredyCompletedException (
+				"Game has already finished"
+		);
 	}
 	
+	Player currentPlayer = players.get (currentPlayerTurn);
 	
-	Player currPlayer = players.get (currentPlayerTurn);
-	int currPos = currPlayer.getPosition ().getNo ();
+	int currentPosition =
+			currentPlayer.getPosition ().getNo ();
 	
-	if ( board.isValid (currPos + dicevalue) == false ) {
-		throw new InvalidMoveException ("out of cell move for this palyer");
+	int targetPosition =
+			currentPosition + diceValue;
+	
+	// Validate move
+	if ( !board.isValid (targetPosition) ) {
+		throw new InvalidMoveException (
+				"Invalid move: position is outside the board"
+		);
 	}
 	
+	// Apply snake/ladder
+	int newPosition = board.apply (targetPosition);
 	
-	// make a move
+	currentPlayer.setPosition (
+			new Position (newPosition)
+	);
 	
-	//check if 6 then give one more chance
+	System.out.println (
+			"Player " +
+					currentPlayer.getName () +
+					" moved to " +
+					newPosition
+	);
 	
-	
-	// apply snake of ladder
-	
-	int newPos = board.apply (currPos+dicevalue);
-	
-	System.out.println ("Player" + currPlayer.getName () + " Made a move to" + newPos);
-	currPlayer.setPosition (new Position (newPos));
-	
-	
-	
-	// check if won
-	
-	if ( winingStrategy.hasWon (this.board, newPos) ) {
-		System.out.println ("Game OVER " + currPlayer.getName () + " WON");
+	// Check winner
+	if ( winingStrategy.hasWon (board, newPosition) ) {
 		
-		this.winnigPlayer = currPlayer;
-		this.gameStatus = GameStatus.COMPLETED;
-		return GameStatus.COMPLETED;
+		System.out.println (
+				"Game Over! " +
+						currentPlayer.getName () +
+						" won."
+		);
+		
+		winnigPlayer = currentPlayer;
+		gameStatus = GameStatus.COMPLETED;
 	}
 	
-	switchPlayer ();
-	
-	
-	return GameStatus.IN_PROGRESS;
-	
-	
+	return gameStatus;
+}
 }
 
-
-}

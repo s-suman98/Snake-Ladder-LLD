@@ -24,7 +24,7 @@ public static void main (String[] args) {
 	
 	
 	// Make baord
-	Board board = new Board (100);
+	Board board = new Board (5000);
 	board.setLadders (List.of (new Ladder (5, 35), new Ladder (14, 56)));
 	board.setSnakes (List.of (new Snake (97, 27), new Snake (60, 35), new Snake (55, 22)));
 	
@@ -34,35 +34,17 @@ public static void main (String[] args) {
 	
 	Game game = Game.builder ().
 			            board (board).
-			            players (List.of (p1, p2))
+			            players (List.of (p1, p2)).dice (new SingleDice ())
 			            .gameStatus (GameStatus.NOT_STARTED).currentPlayerTurn (0).winingStrategy (new SimpleWinStrategy ()).build ();
 	
 	
 	//
 	
-	DiceI dice = new SingleDice ();
 	
 	
-	while ( game.getGameStatus () != GameStatus.COMPLETED ) {
-		int pos = dice.roll ();
-		
-		System.out.println ("||||Dice value|||"+pos);
-		
-		
-		try {
-			
-			game.makeMove (pos);
-			
-			
-		} catch ( Exception e ) {
-			
-			System.out.println ("This palyer cant make move to let another player take and turn");
-			game.switchPlayer ();
-			
-		}
-		
-		
-	}
+	
+	
+	  game.start ();
 	
 	
 }
